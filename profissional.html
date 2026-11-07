@@ -3713,14 +3713,23 @@ window.addEventListener('DOMContentLoaded', () => {
     $('ivpg-receb-painel').style.display = '';
     $('ivp-pro-gestor').scrollTo({ top: 0, behavior: 'smooth' });
   }
+  // Os inventários de valores e de personalidade agora são apps separados: cada arquivo
+  // do paciente traz só os dados do inventário que ele respondeu. Ao atualizar uma
+  // aplicação, só esses dados são substituídos; os do outro inventário ficam como estão.
+  function nomesNoArquivo(d) {
+    var n = [];
+    if (d && (typeof d['ivp-v2-state'] === 'string' || typeof d['ivp-rr-state'] === 'string')) n.push('valores');
+    if (d && typeof d['ivp-personalidade-v3'] === 'string') n.push('personalidade');
+    return n.length ? n.join(' e ') : 'nenhum inventário';
+  }
   function atualizarAvisoReceb() {
     var v = $('ivpg-receb-destino').value, av = '';
     if (v.indexOf('app:') === 0) {
       var a = acharApp(lerIndice(), v.slice(4));
       if (a) {
-        av = 'O progresso de "' + esc(a.app.rotulo) + '" será substituído pelo do arquivo.';
+        av = 'O progresso de ' + nomesNoArquivo(recebido.dados) + ' em "' + esc(a.app.rotulo) + '" será substituído pelo do arquivo. Os dados dos outros inventários desta aplicação são mantidos.';
         if (a.app.origemId && a.app.origemId !== recebido.origemId) av += ' <span class="ivpg-alerta">Atenção: esta aplicação recebeu antes um arquivo de outro aparelho.</span>';
-        if ((a.app.atualizadaEm || '') > (recebido.enviadoEm || '')) av += ' <span class="ivpg-alerta">Atenção: esta aplicação teve atividade depois do envio deste arquivo (' + fmtDataHora(a.app.atualizadaEm) + '); o arquivo pode ser mais antigo.</span>';
+        if ((a.app.atualizadaEm || '') > (recebido.enviadoEm || '') && (a.app.atualizadaEm || '') !== (a.app.importadaEm || '')) av += ' <span class="ivpg-alerta">Atenção: esta aplicação teve atividade depois do envio deste arquivo (' + fmtDataHora(a.app.atualizadaEm) + '); o arquivo pode ser mais antigo.</span>';
       }
     } else if (v === 'novo') av = 'Será criado o paciente e a primeira aplicação dele com este progresso.';
     else av = 'Será criada uma nova aplicação para este paciente com o progresso do arquivo.';
@@ -3758,18 +3767,19 @@ window.addEventListener('DOMContentLoaded', () => {
       app = novaApp(pe); pacNome = pe.nome;
     } else {
       var a = acharApp(ix, v.slice(4)); if (!a) return;
-      if (!confirm('Substituir o progresso de "' + a.app.rotulo + '" (' + a.pac.nome + ') pelo do arquivo enviado em ' + fmtDataHora(recebido.enviadoEm) + '?')) return;
+      if (!confirm('Substituir o progresso de ' + nomesNoArquivo(recebido.dados) + ' em "' + a.app.rotulo + '" (' + a.pac.nome + ') pelo do arquivo enviado em ' + fmtDataHora(recebido.enviadoEm) + '?\n\nOs dados dos outros inventários desta aplicação são mantidos.')) return;
       app = a.app; pacNome = a.pac.nome;
     }
     try {
       R.modKeys.forEach(function (k) {
         var d = recebido.dados[k];
-        if (typeof d === 'string') R.set(appKey(app.id, k), d); else R.rem(appKey(app.id, k));
+        if (typeof d === 'string') R.set(appKey(app.id, k), d);
       });
     } catch (e) { avisoCota(); return; }
     app.origemId = recebido.origemId;
     app.recebidoEm = recebido.enviadoEm;
     app.atualizadaEm = agora();
+    app.importadaEm = app.atualizadaEm; // importar não conta como "atividade depois do envio"
     if (!gravarIndice(ix)) return;
     fecharReceb();
     renderTudo();
